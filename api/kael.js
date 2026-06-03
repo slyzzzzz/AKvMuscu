@@ -1,12 +1,13 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Méthode non autorisée" });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { prompt } = req.body;
+    const { systemPrompt, userPrompt, prompt } = req.body || {};
+    const finalPrompt = userPrompt || prompt || "Génère un programme de musculation.";
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
+    const r = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -14,20 +15,31 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
-        input: prompt,
+        input: [
+          {
+            role: "system",
+            content: systemPrompt || "Tu es Kael, un coach sportif intelligent.",
+          },
+          {
+            role: "user",
+            content: finalPrompt,
+          },
+        ],
       }),
     });
 
-    const data = await response.json();
+    const data = await r.json();
 
-    if (!response.ok) {
-      return res.status(response.status).json(data);
+    if (!r.ok) {
+      return res.status(r.status).json({
+        error: data.error?.message || "Erreur OpenAI",
+      });
     }
 
     return res.status(200).json({
       text: data.output_text,
     });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
   }
 }
