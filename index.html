@@ -637,11 +637,33 @@ function renderPlanning(){
     let cls = isRest?'rest':(isToday?'today':(isDone?'done':'has'));
     pillsEl.innerHTML += `<div class="dp ${cls}"><div class="dc">${day.day[0]}</div><div class="dlbl">${day.day}</div></div>`;
     const meta = isRest ? '' : `${day.exercises.length} ex · ${day.exercises.reduce((a,e)=>a+e.sets,0)} séries${isDone?' · ✓ terminé':isToday?' · En cours':''}`;
+    const clickable = !isRest ? `onclick="openDayDetail(${i})" style="cursor:pointer"` : '';
     tlEl.innerHTML += `<div class="tli ${cls}">
       <div class="tll"><div class="tldot"></div><div class="tlday">${day.day}<br>${dates[i]}</div><div class="tlline"></div></div>
-      <div class="tlc">${isRest?'<div class="tlrest">Repos 💤</div>':`<div class="tlname">${day.name}</div><div class="tlmeta">${meta}</div>`}</div>
+      <div class="tlc" ${clickable}>${isRest?'<div class="tlrest">Repos 💤</div>':`<div class="tlname">${day.name}</div><div class="tlmeta">${meta}</div>${!isRest?'<div style="font-size:11px;color:var(--red2);margin-top:6px;font-family:var(--fm)">Voir le programme →</div>':''}`}</div>
     </div>`;
   });
+}
+
+function openDayDetail(idx){
+  const day = PLANNING[idx];
+  if(!day || day.type==='rest') return;
+  const isToday = idx === TODAY_IDX;
+
+  let exHtml = day.exercises.map((ex,i) => `
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:var(--s2);border:1px solid var(--border);border-radius:12px;margin-bottom:8px;">
+      <div style="font-family:var(--fd);font-size:24px;color:var(--m);width:28px;flex-shrink:0">${String(i+1).padStart(2,'0')}</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:600;margin-bottom:2px">${ex.name}</div>
+        <div style="font-size:12px;color:var(--sub);font-family:var(--fm)">${ex.sets} × ${ex.reps} · ${ex.kg===0?'Poids de corps':ex.kg+' kg'} · repos ${ex.rest==='heavy'?CFG.restHeavy:ex.rest==='comp'?CFG.restComp:CFG.restIso}s</div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('dayDetailTitle').textContent = day.name;
+  document.getElementById('dayDetailMeta').textContent = `${day.day} · ${day.exercises.length} exercices · ${day.exercises.reduce((a,e)=>a+e.sets,0)} séries`;
+  document.getElementById('dayDetailExos').innerHTML = exHtml;
+  document.getElementById('dayDetailStart').style.display = isToday ? 'flex' : 'none';
+  document.getElementById('dayDetailModal').classList.add('open');
 }
 
 function updateStats(){
@@ -1060,5 +1082,23 @@ init();
     }
   });
 </script>
+<!-- DAY DETAIL MODAL -->
+<div class="smm" id="dayDetailModal">
+  <div class="smtop">
+    <button class="smcls" onclick="document.getElementById('dayDetailModal').classList.remove('open')">✕ Fermer</button>
+    <div class="smprog" id="dayDetailMeta"></div>
+  </div>
+  <div class="scroll" style="padding:0 22px 20px">
+    <div style="margin:8px 0 20px">
+      <div style="font-family:var(--fd);font-size:36px;letter-spacing:2px;margin-bottom:4px" id="dayDetailTitle"></div>
+    </div>
+    <div class="slbl">Exercices</div>
+    <div id="dayDetailExos"></div>
+    <button id="dayDetailStart" class="bstart" style="display:none;margin-top:20px" onclick="document.getElementById('dayDetailModal').classList.remove('open');openSession()">
+      🔥 COMMENCER CETTE SÉANCE
+    </button>
+  </div>
+</div>
+
 </body>
 </html>
