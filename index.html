@@ -47,9 +47,13 @@ window._loadFirestoreData = async (uid) => {
 
 
 window.fbSave = async (path, data) => {
-  if (!window._uid) return;
-  try { await setDoc(doc(db,'users',window._uid,path,'data'), data, {merge:true}); }
-  catch(e) { console.warn('Save error:', e); }
+  if (!window._uid) { console.warn('fbSave: no uid'); return; }
+  try {
+    console.log('Saving to Firestore:', path, data);
+    await setDoc(doc(db,'users',window._uid,path,'data'), data, {merge:true});
+    console.log('Firestore save OK:', path);
+  }
+  catch(e) { console.error('Save error:', e); }
 };
 
 window.fbSaveSeance = async (data) => {
@@ -63,6 +67,13 @@ window.fbSaveSeance = async (data) => {
 window.fbTrack = (name, params) => {
   try { logEvent(analytics, name, params || {}); } catch(e) {}
 };
+
+// Signal that Firebase is ready
+window.dispatchEvent(new Event('firebaseReady'));
+// Also try immediate load in case page already loaded
+if(window._uid && window._loadFirestoreData){
+  window._loadFirestoreData(window._uid);
+}
 </script>
 
 <style>
@@ -701,22 +712,13 @@ async function genProg(){
   const userPrompt = `${profile}\n\nMessage de ${CFG.nom}: "${txt}"\n\nGénère un programme détaillé pour la semaine prochaine. Pour chaque jour d'entraînement, indique: le nom de la séance, les exercices avec séries × reps × kg conseillés, et le temps de repos. Adapte les charges au matériel disponible. Termine par un conseil nutrition basé sur l'objectif.`;
 
   try {
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    const r = await fetch('/api/kael', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        max_tokens: 1500,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ]
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ systemPrompt, userPrompt })
     });
     const data = await r.json();
-    if(data.error){ rt.textContent = 'Erreur Kael : ' + data.error.message; }
+    if(data.error){ rt.textContent = 'Erreur Kael : ' + (data.error.message || data.error); }
     else { rt.innerHTML = data.choices[0].message.content.replace(/\n/g,'<br>'); }
     resp.classList.add('show');
     if(window.fbTrack) window.fbTrack('kael_programme_genere');
@@ -953,7 +955,12 @@ function applyParamsToForm(){
   if(CFG.maison!==undefined){const t=document.getElementById('tMaison');if(t){if(CFG.maison)t.classList.add('on');else t.classList.remove('on');}}
 }
 init();
-if(window._loadFirestoreData && window._uid) window._loadFirestoreData(window._uid);
+  // Load Firestore after Firebase module is ready
+  window.addEventListener('firebaseReady', async () => {
+    if(window._loadFirestoreData && window._uid) {
+      await window._loadFirestoreData(window._uid);
+    }
+  });
 </script>
 </body>
 </html>
