@@ -38,10 +38,18 @@ localStorage.setItem('akv_uid', window._uid);
 window._loadFirestoreData = async (uid) => {
   try {
     const cfgSnap = await getDoc(doc(db,'users',uid,'config','data'));
-    if (cfgSnap.exists()) { Object.assign(window.CFG, cfgSnap.data()); if(window.applyParamsToForm){applyParamsToForm(); renderHome(); updateStats();} }
+    if (cfgSnap.exists() && cfgSnap.data()) {
+      if(window.CFG) Object.assign(window.CFG, cfgSnap.data());
+      else window.CFG = cfgSnap.data();
+      if(window.applyParamsToForm){ applyParamsToForm(); renderHome(); updateStats(); }
+    }
     const planSnap = await getDoc(doc(db,'users',uid,'planning','data'));
-    if (planSnap.exists() && planSnap.data().planning) { window.PLANNING = planSnap.data().planning; if(window.renderPlanning){renderPlanning(); renderHome();} }
-  } catch(e) { console.warn('Firestore load:', e); }
+    if (planSnap.exists() && planSnap.data() && planSnap.data().planning) {
+      window.PLANNING = planSnap.data().planning;
+      if(window.renderPlanning){ renderPlanning(); renderHome(); }
+    }
+    console.log('Firestore data loaded OK');
+  } catch(e) { console.error('Firestore load error:', e); }
 };
 
 
@@ -534,15 +542,16 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-w
 
 <script>
 // ── ÉTAT GLOBAL ───────────────────────────────────────────────────────────
-let CFG = {
+window.CFG = {
   nom:'Atilla', poids:74, taille:178, age:20, bras:39,
   objectif:'Hypertrophie', kcalGoal:2800, protGoal:150,
   prepSecs:10, restHeavy:120, restComp:90, restIso:60,
   salle:true, maison:false, haltMax:30, barreMax:100,
   niveau:'Intermédiaire', freq:5, zone:'Haut du corps'
 };
+let CFG = window.CFG;
 
-let PLANNING = [
+window.PLANNING = [
   {day:'LUN', type:'session', name:'POITRINE & TRICEPS', exercises:[
     {name:'Développé couché',sets:4,reps:10,kg:60,rest:'heavy'},
     {name:'Écarté haltères',sets:3,reps:12,kg:16,rest:'iso'},
@@ -571,6 +580,7 @@ let PLANNING = [
   {day:'SAM', type:'rest', name:'Repos', exercises:[]},
   {day:'DIM', type:'rest', name:'Repos', exercises:[]},
 ];
+let PLANNING = window.PLANNING;
 
 const TODAY_IDX = 3; // JEU = index 3 dans le planning
 const HINTS = {1:'Trop facile',2:'Très facile',3:'Facile',4:'Modéré',5:'Correct',6:'Un peu dur',7:'Difficile',8:'Très difficile',9:'Limite',10:'Échec musculaire'};
