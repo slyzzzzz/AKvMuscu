@@ -731,9 +731,40 @@ async function genProg(){
 
   const profile = `Profil: ${CFG.nom}, ${CFG.age} ans, ${CFG.poids}kg, ${CFG.taille}cm, bras ${CFG.bras}cm. Niveau: ${CFG.niveau}. Objectif: ${CFG.objectif}. Zone cible: ${CFG.zone}. Fréquence: ${CFG.freq}x/semaine. Kcal cible: ${CFG.kcalGoal} kcal/jour. Protéines cibles: ${CFG.protGoal}g/jour. Matériel: ${CFG.salle?'salle de sport':''}${CFG.maison?', équipement maison':''}. Haltères max: ${CFG.haltMax}kg. Barre max: ${CFG.barreMax}kg. Repos polyarticulaire: ${CFG.restHeavy}s, composé: ${CFG.restComp}s, isolation: ${CFG.restIso}s.`;
 
-  const systemPrompt = `Tu es Kael, un coach IA de musculation expert, précis et motivant. Tu connais parfaitement la physiologie, la surcharge progressive, le RPE et la périodisation. Tu génères des programmes personnalisés en tenant compte du profil complet de l'utilisateur. Tu réponds toujours en français, de façon structurée et directe.`;
+  const systemPrompt = `Tu es Kael, coach IA musculation expert. Tu génères UNIQUEMENT du JSON valide, sans markdown, sans texte avant ou après. Respecte strictement le format demandé.`;
 
-  const userPrompt = `${profile}\n\nMessage de ${CFG.nom}: "${txt}"\n\nGénère un programme détaillé pour la semaine prochaine. Pour chaque jour d'entraînement, indique: le nom de la séance, les exercices avec séries × reps × kg conseillés, et le temps de repos. Adapte les charges au matériel disponible. Termine par un conseil nutrition basé sur l'objectif.`;
+  const userPrompt = `${profile}
+
+Message de ${CFG.nom}: "${txt}"
+
+Génère un programme pour la semaine prochaine en JSON avec EXACTEMENT ce format:
+{
+  "conseil": "Un conseil court et motivant en 1-2 phrases",
+  "kcalRecommande": 2800,
+  "proteinesRecommandees": 150,
+  "planning": [
+    {
+      "day": "LUN",
+      "type": "session",
+      "name": "NOM SÉANCE EN MAJUSCULES",
+      "exercises": [
+        {"name": "Nom exercice", "sets": 4, "reps": 10, "kg": 60, "rest": "comp"}
+      ]
+    },
+    {
+      "day": "MAR",
+      "type": "rest",
+      "name": "Repos",
+      "exercises": []
+    }
+  ]
+}
+
+Les 7 jours doivent être présents: LUN, MAR, MER, JEU, VEN, SAM, DIM.
+Pour "rest": le champ "type" doit être "rest" et exercises doit être vide.
+Pour "rest" dans les exercices: utilise "heavy" (polyarticulaire lourd), "comp" (composé), ou "iso" (isolation).
+Adapte les kg au matériel disponible. Ne dépasse jamais ${CFG.haltMax}kg pour les haltères ni ${CFG.barreMax}kg pour la barre.
+RÉPONDS UNIQUEMENT AVEC LE JSON, RIEN D'AUTRE.`;
 
   try {
     const r = await fetch('/api/kael', {
@@ -742,12 +773,55 @@ async function genProg(){
       body: JSON.stringify({ systemPrompt, userPrompt })
     });
     const data = await r.json();
-    if(data.error){ rt.textContent = 'Erreur Kael : ' + (data.error.message || data.error); }
-    else { rt.innerHTML = data.choices[0].message.content.replace(/\n/g,'<br>'); }
-    resp.classList.add('show');
-    if(window.fbTrack) window.fbTrack('kael_programme_genere');
+
+    if(data.error){
+      rt.innerHTML = `<span style="color:var(--red2)">Erreur : ${data.error.message || data.error}</span>`;
+      resp.classList.add('show');
+    } else {
+      const raw = data.choices[0].message.content.trim();
+      // Try to parse JSON
+      try {
+        const clean = raw.replace(/```json|```/g,'').trim();
+        const prog = JSON.parse(clean);
+
+        // Apply to PLANNING
+        if(prog.planning && prog.planning.length === 7){
+          window.PLANNING = prog.planning;
+          PLANNING = window.PLANNING;
+          renderPlanning();
+          renderHome();
+          if(window.fbSave) window.fbSave('planning', {planning: PLANNING});
+        }
+
+        // Update nutrition targets
+        if(prog.kcalRecommande) CFG.kcalGoal = prog.kcalRecommande;
+        if(prog.proteinesRecommandees) CFG.protGoal = prog.proteinesRecommandees;
+        if(window.fbSave) window.fbSave('config', CFG);
+
+        // Show conseil + confirmation
+        rt.innerHTML = `
+          <div style="margin-bottom:12px;font-size:13px;color:var(--red2);font-weight:600;letter-spacing:1px;text-transform:uppercase;">✓ Programme appliqué</div>
+          <div style="font-size:13px;color:var(--w);line-height:1.6;margin-bottom:10px;">${prog.conseil || ''}</div>
+          <div style="font-family:var(--fm);font-size:11px;color:var(--sub);">Kcal recommandées : ${prog.kcalRecommandees || CFG.kcalGoal} · Protéines : ${prog.proteinesRecommandees || CFG.protGoal}g</div>
+          <div style="font-family:var(--fm);font-size:11px;color:var(--sub);margin-top:4px;">Planning mis à jour ✓ · Paramètres sauvegardés ✓</div>
+        `;
+        resp.classList.add('show');
+        if(window.fbTrack) window.fbTrack('kael_programme_applique');
+
+      } catch(parseErr) {
+        // JSON parse failed — show raw text with basic markdown
+        const formatted = raw
+          .replace(/```json|```/g,'')
+          .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+          .replace(/###\s?(.*)/g,'<div style="font-family:var(--fd);font-size:18px;letter-spacing:1px;margin:14px 0 6px;color:var(--red2)">$1</div>')
+          .replace(/####\s?(.*)/g,'<div style="font-weight:600;margin:10px 0 4px;color:var(--w)">$1</div>')
+          .replace(/\n/g,'<br>');
+        rt.innerHTML = `<div style="font-size:11px;color:var(--sub);margin-bottom:8px;">⚠ Programme en texte (non appliqué au planning)</div>` + formatted;
+        resp.classList.add('show');
+      }
+    }
   } catch(e) {
-    rt.textContent = 'Erreur de connexion à Kael.';
+    rt.innerHTML = `<span style="color:var(--red2)">Erreur de connexion à Kael.</span>`;
     resp.classList.add('show');
   }
 
