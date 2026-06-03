@@ -28,7 +28,7 @@ const fbApp = initializeApp(firebaseConfig);
 const analytics = getAnalytics(fbApp);
 
 const db = getFirestore(fbApp);
-
+window.db = db;
 
 // Load data after PIN unlock (called from fbSave flow)
 // Set UID at startup
