@@ -48,6 +48,14 @@ window._loadFirestoreData = async (uid) => {
       window.PLANNING = planSnap.data().planning;
       if(window.renderPlanning){ renderPlanning(); renderHome(); }
     }
+    // Load today's nutrition
+    const todayKey = new Date().toISOString().split('T')[0];
+    const nutriSnap = await getDoc(doc(db,'users',uid,'nutrition_'+todayKey,'data'));
+    if (nutriSnap.exists() && nutriSnap.data()) {
+      const nd = nutriSnap.data();
+      window.N = {k:nd.k||0, p:nd.p||0, g:nd.g||0, l:nd.l||0};
+      if(window.updateNutriUI) updateNutriUI();
+    }
     console.log('Firestore data loaded OK');
   } catch(e) { console.error('Firestore load error:', e); }
 };
@@ -689,19 +697,25 @@ function showToast(){
 }
 
 // ── NUTRITION ─────────────────────────────────────────────────────────────
-let N={k:0,p:0,g:0,l:0};
+const today = new Date().toISOString().split('T')[0];
+window.N = {k:0,p:0,g:0,l:0};
+
+window.updateNutriUI = function(){
+  document.getElementById('mk').textContent=window.N.k;
+  document.getElementById('mpr').textContent=window.N.p;
+  document.getElementById('mgl').textContent=window.N.g;
+  document.getElementById('mli').textContent=window.N.l;
+  document.getElementById('ntotal').innerHTML=window.N.k+' / <span id="nGoalDisp">'+CFG.kcalGoal+'</span> kcal';
+}
+
 function addN(){
-  const k=+document.getElementById('nk').value||0;
-  const p=+document.getElementById('np').value||0;
-  const g=+document.getElementById('ng').value||0;
-  const l=+document.getElementById('nl').value||0;
-  N.k+=k;N.p+=p;N.g+=g;N.l+=l;
+  window.N.k += +document.getElementById('nk').value||0;
+  window.N.p += +document.getElementById('np').value||0;
+  window.N.g += +document.getElementById('ng').value||0;
+  window.N.l += +document.getElementById('nl').value||0;
   ['nk','np','ng','nl'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('mk').textContent=N.k;
-  document.getElementById('mpr').textContent=N.p;
-  document.getElementById('mgl').textContent=N.g;
-  document.getElementById('mli').textContent=N.l;
-  document.getElementById('ntotal').innerHTML=N.k+' / <span id="nGoalDisp">'+CFG.kcalGoal+'</span> kcal';
+  window.updateNutriUI();
+  if(window.fbSave) window.fbSave('nutrition_'+today, {...window.N, date: today});
 }
 
 // ── KAEL IA ───────────────────────────────────────────────────────────────
