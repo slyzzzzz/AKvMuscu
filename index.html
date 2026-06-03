@@ -688,20 +688,41 @@ async function genProg(){
   const btn=document.getElementById('kbtn');
   const resp=document.getElementById('kresp');
   const rt=document.getElementById('krtxt');
-  btn.classList.add('loading');btn.textContent='Kael analyse...';resp.classList.remove('show');
-  const profile = `Profil: ${CFG.nom}, ${CFG.age}ans, ${CFG.poids}kg, ${CFG.taille}cm, bras ${CFG.bras}cm. Niveau: ${CFG.niveau}. Objectif: ${CFG.objectif}. Zone cible: ${CFG.zone}. Fréquence: ${CFG.freq}x/semaine. Kcal cible: ${CFG.kcalGoal}. Protéines cibles: ${CFG.protGoal}g. Matériel: ${CFG.salle?'salle de sport':''}${CFG.maison?', maison':''}. Haltères max: ${CFG.haltMax}kg. Barre max: ${CFG.barreMax}kg. Repos heavy: ${CFG.restHeavy}s, comp: ${CFG.restComp}s, iso: ${CFG.restIso}s.`;
-  try{
-    const r=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',max_tokens:1200,
-        messages:[{role:'user',content:`Tu es Kael, coach IA musculation expert et précis. ${profile} Message d'${CFG.nom}: "${txt}". Génère un programme semaine prochaine adapté à son profil. Pour chaque jour: nom séance, exercices, séries×reps, kg conseillés, temps de repos. Adapte au matériel disponible. Réponds en français, structuré et motivant.`}]
+  btn.classList.add('loading');
+  btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> KAEL ANALYSE...';
+  resp.classList.remove('show');
+
+  const profile = `Profil: ${CFG.nom}, ${CFG.age} ans, ${CFG.poids}kg, ${CFG.taille}cm, bras ${CFG.bras}cm. Niveau: ${CFG.niveau}. Objectif: ${CFG.objectif}. Zone cible: ${CFG.zone}. Fréquence: ${CFG.freq}x/semaine. Kcal cible: ${CFG.kcalGoal} kcal/jour. Protéines cibles: ${CFG.protGoal}g/jour. Matériel: ${CFG.salle?'salle de sport':''}${CFG.maison?', équipement maison':''}. Haltères max: ${CFG.haltMax}kg. Barre max: ${CFG.barreMax}kg. Repos polyarticulaire: ${CFG.restHeavy}s, composé: ${CFG.restComp}s, isolation: ${CFG.restIso}s.`;
+
+  const systemPrompt = `Tu es Kael, un coach IA de musculation expert, précis et motivant. Tu connais parfaitement la physiologie, la surcharge progressive, le RPE et la périodisation. Tu génères des programmes personnalisés en tenant compte du profil complet de l'utilisateur. Tu réponds toujours en français, de façon structurée et directe.`;
+
+  const userPrompt = `${profile}\n\nMessage de ${CFG.nom}: "${txt}"\n\nGénère un programme détaillé pour la semaine prochaine. Pour chaque jour d'entraînement, indique: le nom de la séance, les exercices avec séries × reps × kg conseillés, et le temps de repos. Adapte les charges au matériel disponible. Termine par un conseil nutrition basé sur l'objectif.`;
+
+  try {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 1500,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ]
       })
     });
-    const data=await r.json();
-    rt.innerHTML=data.content[0].text.replace(/\n/g,'<br>');
+    const data = await r.json();
+    if(data.error){ rt.textContent = 'Erreur Kael : ' + data.error.message; }
+    else { rt.innerHTML = data.choices[0].message.content.replace(/\n/g,'<br>'); }
     resp.classList.add('show');
-  }catch(e){rt.textContent='Erreur connexion Kael.';resp.classList.add('show');}
+    if(window.fbTrack) window.fbTrack('kael_programme_genere');
+  } catch(e) {
+    rt.textContent = 'Erreur de connexion à Kael.';
+    resp.classList.add('show');
+  }
+
   btn.classList.remove('loading');
   btn.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> GÉNÈRE PROGRAMME';
 }
