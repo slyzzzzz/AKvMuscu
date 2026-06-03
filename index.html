@@ -9,7 +9,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAnalytics, logEvent } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
 import { getFirestore, doc, setDoc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -24,43 +24,25 @@ const firebaseConfig = {
 
 const fbApp = initializeApp(firebaseConfig);
 const analytics = getAnalytics(fbApp);
-const auth = getAuth(fbApp);
+
 const db = getFirestore(fbApp);
-const provider = new GoogleAuthProvider();
 
-// Auth listener
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    window._uid = user.uid;
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('appRoot').style.display = 'block';
-    // Update avatar with real name
-    const name = user.displayName ? user.displayName.split(' ')[0] : 'Atilla';
-    if (document.getElementById('pNom')) document.getElementById('pNom').value = name;
-    document.getElementById('hName').textContent = name;
-    // Load Firestore data
-    try {
-      const cfgSnap = await getDoc(doc(db,'users',user.uid,'config','data'));
-      if (cfgSnap.exists()) { Object.assign(window.CFG, cfgSnap.data()); applyParamsToForm(); renderHome(); updateStats(); }
-      const planSnap = await getDoc(doc(db,'users',user.uid,'planning','data'));
-      if (planSnap.exists() && planSnap.data().planning) { window.PLANNING = planSnap.data().planning; renderPlanning(); renderHome(); }
-    } catch(e) { console.warn('Firestore load:', e); }
-    logEvent(analytics, 'app_open', { uid: user.uid });
-  } else {
-    window._uid = null;
-    document.getElementById('loginScreen').style.display = 'flex';
-    document.getElementById('appRoot').style.display = 'none';
-  }
-});
 
-window.loginGoogle = async () => {
-  try { await signInWithPopup(auth, provider); }
-  catch(e) { alert('Erreur connexion: ' + e.message); }
+// Load data after PIN unlock (called from fbSave flow)
+// Set UID at startup
+window._uid = localStorage.getItem('akv_uid') || 'user_' + Math.random().toString(36).slice(2);
+localStorage.setItem('akv_uid', window._uid);
+
+window._loadFirestoreData = async (uid) => {
+  try {
+    const cfgSnap = await getDoc(doc(db,'users',uid,'config','data'));
+    if (cfgSnap.exists()) { Object.assign(window.CFG, cfgSnap.data()); if(window.applyParamsToForm){applyParamsToForm(); renderHome(); updateStats();} }
+    const planSnap = await getDoc(doc(db,'users',uid,'planning','data'));
+    if (planSnap.exists() && planSnap.data().planning) { window.PLANNING = planSnap.data().planning; if(window.renderPlanning){renderPlanning(); renderHome();} }
+  } catch(e) { console.warn('Firestore load:', e); }
 };
 
-window.logoutUser = async () => {
-  await signOut(auth);
-};
+
 
 window.fbSave = async (path, data) => {
   if (!window._uid) return;
@@ -301,20 +283,9 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-w
 </style>
 </head>
 <body>
-<!-- LOGIN SCREEN -->
-<div id="loginScreen" style="display:flex;position:fixed;inset:0;background:#080808;z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:32px;">
-  <div style="font-family:'Bebas Neue',sans-serif;font-size:52px;letter-spacing:4px;color:#f0f0f0;margin-bottom:6px;">AKV<span style="color:#e53935">MUSCU</span></div>
-  <div style="font-size:13px;color:#888;margin-bottom:60px;letter-spacing:1px;">Ton coach IA · Performance · Discipline</div>
-  <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#e53935,#7f1d1d);display:flex;align-items:center;justify-content:center;font-size:36px;margin-bottom:40px;box-shadow:0 8px 32px rgba(229,57,53,0.4);">&#x1F4AA;</div>
-  <button onclick="loginGoogle()" style="width:100%;max-width:320px;background:#fff;border:none;border-radius:14px;padding:16px 24px;font-family:'Outfit',sans-serif;font-size:16px;font-weight:600;color:#111;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;transition:all .2s;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
-    <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-    Continuer avec Google
-  </button>
-  <div style="margin-top:20px;font-size:11px;color:#555;text-align:center;">Tes données sont sauvegardées dans le cloud.<br>Accessible partout, tout le temps.</div>
-</div>
 
-<!-- APP ROOT -->
-<div id="appRoot" style="display:none;">
+
+
 
 
 <!-- PAGE 1: SÉANCE -->
@@ -464,7 +435,7 @@ nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-w
   </div>
 
   <button class="save-btn" onclick="saveParams()">&#x2713; SAUVEGARDER</button>
-  <button onclick="logoutUser()" style="width:calc(100% - 44px);margin:0 22px 40px;background:transparent;border:1px solid var(--border);border-radius:14px;color:var(--sub);font-family:var(--fd);font-size:16px;letter-spacing:2px;padding:14px;cursor:pointer;">DÉCONNEXION</button>
+
  </div>
 </div>
 
@@ -959,7 +930,7 @@ function applyParamsToForm(){
   if(CFG.maison!==undefined){const t=document.getElementById('tMaison');if(t){if(CFG.maison)t.classList.add('on');else t.classList.remove('on');}}
 }
 init();
+if(window._loadFirestoreData && window._uid) window._loadFirestoreData(window._uid);
 </script>
-</div>
 </body>
 </html>
